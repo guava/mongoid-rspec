@@ -5,8 +5,18 @@ module Mongoid
         @attributes = attrs.collect(&:to_s)
       end
 
+      def localized
+        @localized = true
+        self
+      end
+
       def of_type(type)
         @type = type
+        self
+      end
+      
+      def with_alias(field_alias)
+        @field_alias = field_alias
         self
       end
 
@@ -25,11 +35,26 @@ module Mongoid
               error << " of type #{@klass.fields[attr].type}"
             end
 
-            if !@default.nil? and !@klass.fields[attr].default_val.nil? and @klass.fields[attr].default_val != @default
-              error << " with default value of #{@klass.fields[attr].default_val}"
+            if !@default.nil?
+              if @klass.fields[attr].default_val.nil?
+                error << " with default not set"
+              elsif @klass.fields[attr].default_val != @default
+                error << " with default value of #{@klass.fields[attr].default_val}"
+              end
+            end
+
+            if @field_alias and @klass.fields[attr].options[:as] != @field_alias
+              error << " with alias #{@klass.fields[attr].options[:as]}"
             end
 
             @errors.push("field #{attr.inspect}" << error) unless error.blank?
+
+            if @localized
+              unless @klass.fields[attr].localized?
+                @errors.push "is not localized #{attr.inspect}"
+              end
+            end
+            
           else
             @errors.push "no field named #{attr.inspect}"
           end
@@ -48,6 +73,7 @@ module Mongoid
       def description
         desc = "have #{@attributes.size > 1 ? 'fields' : 'field'} named #{@attributes.collect(&:inspect).to_sentence}"
         desc << " of type #{@type.inspect}" if @type
+        desc << " with alias #{@field_alias}" if @field_alias
         desc << " with default value of #{@default.inspect}" if !@default.nil?
         desc
       end
@@ -92,11 +118,24 @@ end
 
 RSpec::Matchers.define :be_timestamped_document do
   match do |doc|
-    doc.class.included_modules.include?(Mongoid::Timestamps)
+    if [*@timestamped_module].any?
+      modules = [*@timestamped_module].map{|m| "Mongoid::Timestamps::#{m.to_s.classify}".constantize }
+      (modules - doc.class.included_modules).empty?
+    else
+      doc.class.included_modules.include?(Mongoid::Timestamps) or
+      doc.class.included_modules.include?(Mongoid::Timestamps::Created) or
+      doc.class.included_modules.include?(Mongoid::Timestamps::Updated)
+    end
+  end
+
+  chain :with do |timestamped_module|
+    @timestamped_module = timestamped_module
   end
 
   description do
-    "be a timestamped Mongoid document"
+    desc = "be a timestamped Mongoid document"
+    desc << " with #{@timestamped_module}" if @timestamped_module
+    desc
   end
 end
 

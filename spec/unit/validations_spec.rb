@@ -19,6 +19,8 @@ describe "Validations" do
     it { should validate_numericality_of(:age).on(:create, :update) }
     it { should validate_inclusion_of(:age).to_allow(23..42).on([:create, :update]) }
     it { should validate_presence_of(:password).on(:create) }
+    it { should validate_presence_of(:provider_uid).on(:create) }
+    it { should validate_inclusion_of(:locale).to_allow([:en, :ru]) }
   end
 
   describe Profile do
@@ -28,6 +30,8 @@ describe "Validations" do
 
   describe Article do
     it { should validate_length_of(:title).within(8..16) }
+    it { should_not validate_length_of(:content).greater_than(200).less_than(16) }
+    it { should validate_length_of(:content).greater_than(200) }
   end
 
   describe MovieArticle do
